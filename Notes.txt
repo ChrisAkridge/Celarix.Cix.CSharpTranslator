@@ -1,0 +1,52 @@
+C#-to-Cix Roslyn Code Analyzer Rules:
+	- Applies only to classes and structs with the CixTranslateAttribute declared
+	- All classes must be public and static, all structs public and not readonly
+	- The only valid members in classes are fields (which become global variables) and static methods
+	- All structs must also implement ICixStruct<T>, which declares the following members:
+		- Pointer<T> AddressOf() - when implemented in a struct, this method must contain only a throw InvalidOperationException statement.
+	- The following members are valid in structs:
+		- Fields (which become fields in Cix structs in the order of their declaration)
+		- Properties (which are converted into get/set functions)
+		- Constructors (which are converted to methods that create and return a struct instance, use CixConstructorReturnsPointerAttribute to have it return a pointer, instead)
+		- Methods (which make the "this" parameter explicit as a pointer)
+	- All typed members are only allowed to use the following types:
+		- byte, sbyte, short, ushort, int, uint, long, ulong, float, double
+		- bool (translated to int)
+		- Any struct with the CixTranslateAttribute
+		- The Pointer<T> generic class where T is an allowed type
+		- The FunctionPointer<TResult, T1, ...> generic classes where all type parameters are allowed types
+		- void for methods
+	- Method bodies may only contain the following constructs:
+		- If/else/else if
+		- While and do-while loops
+		- For loops (for loops with inline declarations are allowed and will be translated to the proper form)
+		- Switch statements (switch expressions are permitted but will be translated into switch expressions if I can figure out how to do that)
+		- Break/continue in loops
+		- Expression statements
+		- Variable declarations, plus those with initializers
+	- Expressions may only use the following constructs:
+		- Integral literals
+		- Floating point literals
+		- String literals
+		- Boolean literals (translated to (int)0 and (int)1)
+		- Identifiers naming local variables, parameters, or fields
+		- Array access on pointer-typed variables
+		- Function invocation only for functions in CixTranslateAttribute-decorated types (method invocation on local struct instances is translated as function invocation passing the instance as a pointer), or for extension methods from the Extensions class or methods in the Helpers class, and other infrastructure methods
+		- Unary, binary, and ternary expression operators
+			- Valid unary operators: + - ~ ++ --
+			- Valid binary operators: + - * / % & | ^ << >> . = += -= *= /= %= &= |= ^= <<= >>= == != < <= > >= && ||
+			- Valid ternary operator: ?:
+	- Infrastructure types:
+		- Helpers class
+			- int SizeOf<T>(): T must be an allowed type, translated as a simple sizeof statement in Cix
+		- Extensions class
+			- Pointer<T> AddressOf<T>(this T): Stub method that will be rewritten to &value, extension on every built-in C# type
+			- T LogicalNOT<T>(this T): Stub method representing the ! unary operator
+		- Pointer<T> class
+			- Declares stub operators + and -
+			- Has a stub indexer accepting an int index
+			- ValueAt(): a stub representing the * operator
+			- U Member<U>(Expression<Func<T, U>> memberAccessor): a stub representing the -> operator (i.e. temperatureSettings.Member(t => t.CelsiusOrFahrenheit))
+		- FunctionPointer<TResult, T1...>
+			- TResult Invoke(T1, ...): Stub method representing invocation of the function pointer
+		- HardwareCalls: static class auto-generated from a hardware definition that contains stubs for C# code to call, not included in the Cix output since Cix autogenerates the hardware call functions anyway
